@@ -1,0 +1,8 @@
+.env.example
+*.log
+*__pycache__/
+venv/
+.idea/
+*token.json
+*credentials.json
+*.pickle
