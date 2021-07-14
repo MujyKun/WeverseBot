@@ -65,7 +65,7 @@ class Weverse(commands.Cog):
     async def fetch_channels(self):
         """Fetch the channels from DB and add them to cache."""
         while not self.bot.conn.pool:
-            await sleep(1)  # give time for DataBase connection to establish
+            await sleep(3)  # give time for DataBase connection to establish and properly create tables/schemas.
         for channel_id, community_name, role_id, media_enabled, comments_enabled \
                 in await self.bot.conn.fetch_channels():
             self.add_to_cache(community_name, channel_id, role_id, media_enabled, comments_enabled)
