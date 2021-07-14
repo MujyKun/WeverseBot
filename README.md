@@ -20,13 +20,13 @@ Open the `.env` file and change the weverse auth token, discord bot token, and p
 **The Bot Prefix is set to `^` by default. There is currently no way to change it.**  
 **Anything in brackets [] is optional.**  
 **Anything in <> is required.**  
-**In order to disable/enable features, retyping the same exact command will toggle it.
+**In order to disable/enable features, retyping the same exact command will toggle it.**
 
 
 ^weverse [Community Name] -> Follow a weverse community. Use without the community name to get a list of communities.  
 ^media <Community Name> -> Will enable/disable the media from that community.  
-^comments <Community Name> Will enable/disable the comments from that community.  
-^role <Role> <Community Name> Will add or update a role to mention for a community.  
+^comments <Community Name> -> Will enable/disable the comments from that community.  
+^role <Role> <Community Name> -> Will add or update a role to mention for a community.  
 
 ^patreon -> Link to patreon.  
 ^invite -> Link to invite bot.  
