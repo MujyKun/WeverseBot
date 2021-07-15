@@ -17,7 +17,10 @@ class WeverseBot(AutoShardedBot):
         if isinstance(exception, errors.CommandNotFound):
             ...
         elif isinstance(exception, errors.CommandInvokeError):
-            if exception.original.status == 403:
+            try:
+                if exception.original.status == 403:
+                    return
+            except AttributeError:
                 return
             return await context.send(f"{exception}")
         elif isinstance(exception, errors.BadArgument):
