@@ -68,7 +68,19 @@ class Weverse(commands.Cog):
             await sleep(3)  # give time for DataBase connection to establish and properly create tables/schemas.
         for channel_id, community_name, role_id, media_enabled, comments_enabled \
                 in await self.bot.conn.fetch_channels():
+
             self.add_to_cache(community_name, channel_id, role_id, media_enabled, comments_enabled)
+
+        # recreate the db (to match a new structure) and insert values from cache.
+        await self.update_db_struct_from_cache()
+
+    async def update_db_struct_from_cache(self):
+        """Will destroy the current db and update it's structure and reinsert values from the current cache."""
+        await self.bot.conn.recreate_db()
+        for key, channels in self._channels.items():
+            for channel in channels.values():
+                await self.bot.conn.insert_weverse_channel(channel.id, f"{key}", channel.media_enabled,
+                                                           channel.comments_enabled)
 
     def is_following(self, community_name, channel_id):
         """Check if a channel is following a community."""
@@ -124,28 +136,31 @@ class Weverse(commands.Cog):
     @commands.command(aliases=["updates"])
     async def weverse(self, ctx, *, community_name: str = None):
         """Follow or Unfollow a Weverse Community."""
-        community_names = ', '.join(self.get_community_names())
-        if not community_name:
-            return await self.send_communities_available(ctx)
+        try:
+            community_names = ', '.join(self.get_community_names())
+            if not community_name:
+                return await self.send_communities_available(ctx)
 
-        community_name = community_name.lower()
+            community_name = community_name.lower()
 
-        community: Optional[models.Community] = None
-        for t_community in self.weverse_client.all_communities.values():
-            if t_community.name.lower() == community_name:
-                community = t_community
+            community: Optional[models.Community] = None
+            for t_community in self.weverse_client.all_communities.values():
+                if t_community.name.lower() == community_name:
+                    community = t_community
 
-        if not community:
-            return await ctx.send(f"The Weverse Community Name you have entered does not exist. Your options are "
-                                  f"``{community_names}``.")
+            if not community:
+                return await ctx.send(f"The Weverse Community Name you have entered does not exist. Your options are "
+                                      f"``{community_names}``.")
 
-        if self.is_following(community.name, ctx.channel.id):
-            await self.delete_channel(ctx.channel.id, community.name)
-            await ctx.send(f"You are no longer following {community_name}.")
-        else:
-            self.add_to_cache(community_name, ctx.channel.id, None, True, True)
-            await self.bot.conn.insert_weverse_channel(ctx.channel.id, community_name)
-            await ctx.send(f"You are now following {community.name}.")
+            if self.is_following(community.name, ctx.channel.id):
+                await self.delete_channel(ctx.channel.id, community.name)
+                await ctx.send(f"You are no longer following {community_name}.")
+            else:
+                self.add_to_cache(community_name, ctx.channel.id, None, True, True)
+                await self.bot.conn.insert_weverse_channel(ctx.channel.id, community_name)
+                await ctx.send(f"You are now following {community.name}.")
+        except Exception as e:
+            return await ctx.send(e)
 
     @commands.command()
     async def media(self, ctx, *, community_name):

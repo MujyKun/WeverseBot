@@ -51,3 +51,10 @@ class PostgreSQL(AbstractDataBase):
     async def fetch_channels(self):
         async with self.pool.acquire() as conn:
             return await conn.fetch(self._fetch_all_sql)
+
+    async def recreate_db(self):
+        async with self.pool.acquire() as conn:
+            await conn.execute(self._drop_table_sql)
+            await conn.execute(self._drop_schema_sql)
+        await self.__create_weverse_schema()
+        await self.__create_weverse_table()

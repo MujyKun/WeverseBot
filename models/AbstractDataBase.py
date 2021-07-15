@@ -27,12 +27,13 @@ class AbstractDataBase:
         self._create_table_sql = f"""
             CREATE TABLE IF NOT EXISTS {self._schema_name}.{self._table_name}
             (
+                id serial,
                 channelid bigint,
                 communityname text,
                 roleid bigint,
                 comments boolean,
                 media boolean,
-                PRIMARY KEY (channelid)
+                PRIMARY KEY (id)
             )
         """
         self._insert_channel_sql = f"INSERT INTO {self._schema_name}.{self._table_name}(channelid, communityname, " \
@@ -46,6 +47,8 @@ class AbstractDataBase:
         self._update_role_sql = self._toggle_sql.replace("column_name", "roleid")
         self._fetch_all_sql = f"SELECT channelid, communityname, roleid, media, comments FROM " \
                               f"{self._schema_name}.{self._table_name}"
+        self._drop_schema_sql = f"DROP SCHEMA IF EXISTS {self._schema_name}"
+        self._drop_table_sql = f"DROP TABLE IF EXISTS {self._schema_name}.{self._table_name}"
 
     async def connect(self):
         """Create the connection for the DataBase."""
@@ -106,4 +109,8 @@ class AbstractDataBase:
 
     async def fetch_channels(self):
         """Fetch channels, the channels they are following, and the media/comment status."""
+        ...
+
+    async def recreate_db(self):
+        """Will update the database by dropping the table and recreating it with the new sql."""
         ...
