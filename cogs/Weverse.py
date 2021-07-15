@@ -364,11 +364,13 @@ class Weverse(commands.Cog):
         if not community_name:
             return
 
-        channels = self._channels.get(community_name.lower()).values()
+        channels = self._channels.get(community_name.lower())
+        if not channels:
+            return
+        channels = channels.values()
         if not channels:
             print("WARNING: There were no channels to post the Weverse notification to.")
             return
-        channels = channels.values()
 
         noti_type = self.weverse_client.determine_notification_type(notification.message)
         embed_title = f"New {community_name} Notification!"
@@ -408,20 +410,23 @@ class Weverse(commands.Cog):
 
     @tasks.loop(seconds=45, minutes=0, hours=0, reconnect=True)
     async def weverse_updates(self):
-        if not self.weverse_client.cache_loaded:
-            return
+        try:
+            if not self.weverse_client.cache_loaded:
+                return
 
-        if not await self.weverse_client.check_new_user_notifications():
-            return
+            if not await self.weverse_client.check_new_user_notifications():
+                return
 
-        user_notifications = self.weverse_client.user_notifications
-        if not user_notifications:
-            return
+            user_notifications = self.weverse_client.user_notifications
+            if not user_notifications:
+                return
 
-        new_notifications = self.weverse_client.get_new_notifications()
+            new_notifications = self.weverse_client.get_new_notifications()
 
-        for notification in new_notifications:
-            await self.send_notification(notification)
+            for notification in new_notifications:
+                await self.send_notification(notification)
+        except Exception as e:
+            print(e)
 
 
 def setup(bot: commands.AutoShardedBot):
