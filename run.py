@@ -1,6 +1,6 @@
 import discord
 from dotenv import load_dotenv
-from discord.ext.commands import AutoShardedBot
+from discord.ext.commands import AutoShardedBot, errors
 from os import getenv
 from models import PostgreSQL, AbstractDataBase
 
@@ -12,6 +12,18 @@ class WeverseBot(AutoShardedBot):
         super().__init__(command_prefix, **options.get("options"))
 
         self.conn: AbstractDataBase = PostgreSQL(**options.get("db_kwargs"))  # db connection
+
+    async def on_command_error(self, context, exception):
+        if isinstance(exception, errors.CommandNotFound):
+            ...
+        elif isinstance(exception, errors.CommandInvokeError):
+            if exception.original.status == 403:
+                return
+            return await context.send(f"{exception}")
+        elif isinstance(exception, errors.BadArgument):
+            return await context.send(f"{exception}")
+        else:
+            ...
 
 
 if __name__ == '__main__':
