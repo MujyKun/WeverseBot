@@ -412,16 +412,20 @@ class Weverse(commands.Cog):
             return  # we do not want constant attempts to send a message.
 
         for channel_info in channels:
-            channel_info: TextChannel = channel_info  # for typing
-            await sleep(2)
+            try:
+                channel_info: TextChannel = channel_info  # for typing
+                await sleep(2)
 
-            if notification.id in channel_info.already_posted:
-                continue
+                if notification.id in channel_info.already_posted:
+                    continue
 
-            channel_info.already_posted.append(notification.id)
+                channel_info.already_posted.append(notification.id)
 
-            await self.send_weverse_to_channel(channel_info, message_text, embed, is_comment, is_media, community_name,
-                                               media=media)
+                print(f"Sending post for {community_name} to text channel {channel_info.id}.")
+                await self.send_weverse_to_channel(channel_info, message_text, embed, is_comment, is_media,
+                                                   community_name, media=media)
+            except:
+                pass
 
     @tasks.loop(seconds=45, minutes=0, hours=0, reconnect=True)
     async def weverse_updates(self):
@@ -437,8 +441,8 @@ class Weverse(commands.Cog):
                 return
 
             new_notifications = self.weverse_client.get_new_notifications()
-
             for notification in new_notifications:
+                print(f"Found new notification: {notification.id}.")
                 await self.send_notification(notification)
         except Exception as e:
             print(e)
