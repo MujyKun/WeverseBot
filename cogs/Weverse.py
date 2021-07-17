@@ -424,8 +424,9 @@ class Weverse(commands.Cog):
                 print(f"Sending post for {community_name} to text channel {channel_info.id}.")
                 await self.send_weverse_to_channel(channel_info, message_text, embed, is_comment, is_media,
                                                    community_name, media=media)
-            except:
-                pass
+            except Exception as e:
+                print(f"{e} - Failed to send to channel.")
+
 
     @tasks.loop(seconds=45, minutes=0, hours=0, reconnect=True)
     async def weverse_updates(self):
@@ -442,8 +443,11 @@ class Weverse(commands.Cog):
 
             new_notifications = self.weverse_client.get_new_notifications()
             for notification in new_notifications:
-                print(f"Found new notification: {notification.id}.")
-                await self.send_notification(notification)
+                try:
+                    print(f"Found new notification: {notification.id}.")
+                    await self.send_notification(notification)
+                except Exception as e:
+                    print(e)
         except Exception as e:
             print(e)
 
