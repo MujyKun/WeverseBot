@@ -188,6 +188,15 @@ class Weverse(commands.Cog):
         return await ctx.send(f"You will now {'no longer' if not text_channel.media_enabled else ''} receive "
                               f"comments posts for this community.")
 
+    @commands.is_owner()
+    @commands.command()
+    async def testweverse(self, ctx):
+        """Will attempt to post the latest notification."""
+        if not self.weverse_client.user_notifications:
+            return await ctx.send("No notifications stored.")
+
+        await self.send_notification(self.weverse_client.user_notifications[0])
+
     @commands.command()
     async def role(self, ctx, role: discord.Role, *, community_name: str):
         """Add a role to be notified when a community posts."""
@@ -427,7 +436,6 @@ class Weverse(commands.Cog):
             except Exception as e:
                 print(f"{e} - Failed to send to channel.")
 
-
     @tasks.loop(seconds=45, minutes=0, hours=0, reconnect=True)
     async def weverse_updates(self):
         try:
@@ -437,12 +445,10 @@ class Weverse(commands.Cog):
             if not await self.weverse_client.check_new_user_notifications():
                 return
 
-            user_notifications = self.weverse_client.user_notifications
-            if not user_notifications:
+            if not self.weverse_client.user_notifications:
                 return
 
-            new_notifications = self.weverse_client.get_new_notifications()
-            for notification in new_notifications:
+            for notification in self.weverse_client.get_new_notifications():
                 try:
                     print(f"Found new notification: {notification.id}.")
                     await self.send_notification(notification)
