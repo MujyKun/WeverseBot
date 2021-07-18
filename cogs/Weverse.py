@@ -391,7 +391,8 @@ class Weverse(commands.Cog):
         channels = self._channels.get(community_name.lower())
         if not channels:
             return
-        channels = channels.values()
+
+        channels = (channels.copy()).values()  # copy to prevent size change during iteration.
         if not channels:
             print("WARNING: There were no channels to post the Weverse notification to.")
             return
