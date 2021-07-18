@@ -170,23 +170,31 @@ class Weverse(commands.Cog):
             return await self.send_communities_available(ctx)
 
         text_channel = self.get_channel(community_name, ctx.channel.id)
+        if not text_channel:
+            return await ctx.send(f"This channel is not currently following {community_name}.")
+
         await self.bot.conn.toggle_media(ctx.channel.id, community_name, text_channel.media_enabled)
         text_channel.media_enabled = not text_channel.media_enabled
-        return await ctx.send(f"You will now {'no longer' if not text_channel.media_enabled else ''} receive "
+        return await ctx.send(f"You will now{' no longer' if not text_channel.media_enabled else ''} receive "
                               f"media posts for this community.")
 
     @commands.command()
     async def comments(self, ctx, *, community_name):
         """Toggle Comments Status for a Community."""
-        community_name = community_name.lower()
-        if not self.check_community_exists(community_name):
-            return await self.send_communities_available(ctx)
+        try:
+            community_name = community_name.lower()
+            if not self.check_community_exists(community_name):
+                return await self.send_communities_available(ctx)
 
-        text_channel = self.get_channel(community_name, ctx.channel.id)
-        await self.bot.conn.toggle_comments(ctx.channel.id, community_name, text_channel.comments_enabled)
-        text_channel.comments_enabled = not text_channel.comments_enabled
-        return await ctx.send(f"You will now {'no longer' if not text_channel.media_enabled else ''} receive "
-                              f"comments posts for this community.")
+            text_channel = self.get_channel(community_name, ctx.channel.id)
+            if not text_channel:
+                return await ctx.send(f"This channel is not currently following {community_name}.")
+            await self.bot.conn.toggle_comments(ctx.channel.id, community_name, text_channel.comments_enabled)
+            text_channel.comments_enabled = not text_channel.comments_enabled
+            return await ctx.send(f"You will now{' no longer' if not text_channel.comments_enabled else ''} receive "
+                                  f"comments posts for this community.")
+        except Exception as e:
+            return await ctx.send(f"ERROR: {e}")
 
     @commands.is_owner()
     @commands.command()
@@ -205,6 +213,8 @@ class Weverse(commands.Cog):
             return await self.send_communities_available(ctx)
 
         text_channel = self.get_channel(community_name, ctx.channel.id)
+        if not text_channel:
+            return await ctx.send(f"This channel is not currently following {community_name}.")
         if text_channel.role_id and text_channel.role_id == role.id:
             text_channel.role_id = None
             await self.bot.conn.update_role(ctx.channel.id, community_name, None)
