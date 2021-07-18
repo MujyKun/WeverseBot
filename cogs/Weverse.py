@@ -36,7 +36,7 @@ class Weverse(commands.Cog):
         self.weverse_client = WeverseClientAsync(**client_kwargs)
         loop.create_task(self.weverse_client.start(create_old_posts=False))
 
-        # self.weverse_updates.start()
+        self.weverse_updates.start()
 
     async def cog_check(self, ctx):
         """A local check for this cog. Checks if the user is a data mod."""
