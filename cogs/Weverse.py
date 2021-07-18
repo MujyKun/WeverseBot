@@ -231,8 +231,8 @@ class Weverse(commands.Cog):
                               url=title_url or EmptyEmbed)
 
         embed.set_author(name="Weverse", url="https://www.patreon.com/mujykun?fan_landing=true",
-                         icon_url=icon_url)
-        embed.set_footer(text=footer_desc, icon_url=footer_url)
+                         icon_url=icon_url or EmptyEmbed)
+        embed.set_footer(text=footer_desc, icon_url=footer_url or EmptyEmbed)
         return embed
 
     async def set_comment_embed(self, notification, embed_title):
