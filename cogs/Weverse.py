@@ -36,7 +36,7 @@ class Weverse(commands.Cog):
         self.weverse_client = WeverseClientAsync(**client_kwargs)
         loop.create_task(self.weverse_client.start(create_old_posts=False))
 
-        self.weverse_updates.start()
+        # self.weverse_updates.start()
 
     async def cog_check(self, ctx):
         """A local check for this cog. Checks if the user is a data mod."""
@@ -56,7 +56,11 @@ class Weverse(commands.Cog):
             async with self._web_session.post(self._translate_endpoint, headers=self._translate_headers, data=data) \
                     as r:
                 if r.status == 200:
-                    body = await r.json()
+                    try:
+                        body = await r.json()
+                    except Exception as e:
+                        print(f"{e} - (Exception)")
+                        body = await r.json(content_type="text/html")
                     if body.get("code") == 0:
                         return body.get("text")
         except Exception as e:
@@ -255,15 +259,20 @@ class Weverse(commands.Cog):
             if artist_comments:
                 comment_body = (artist_comments[0]).body
             else:
+                print(f"Could not find a comment body for Noti ID: {notification.id} Community ID: "
+                      f"{notification.community_id}")
                 return
-        translation = await self.weverse_client.translate(
-            notification.contents_id, is_comment=True,
-            community_id=notification.community_id) or await self.translate(comment_body)
+        translation = await self.weverse_client.translate(notification.contents_id, is_comment=True,
+                                                          community_id=notification.community_id)
+
+        if not translation:
+            print(f"Attempting to use Self Translation for Noti ID: {notification.id} Community ID: "
+                  f"{notification.community_id}")
+            translation = await self.translate(comment_body)
 
         embed_description = f"**{notification.message}**\n\n" \
                             f"Content: **{comment_body}**\n" \
                             f"Translated Content: **{translation}**"
-
         embed = await self.create_embed(title=embed_title, title_desc=embed_description)
         return embed
 
@@ -295,45 +304,50 @@ class Weverse(commands.Cog):
         :returns: Embed, file locations, and image urls.
         """
         post = self.weverse_client.get_post_by_id(notification.contents_id)
-        if post:
-            translation = await self.weverse_client.translate(
-                post.id, is_post=True, p_obj=post,
-                community_id=notification.community_id) or await self.translate(post.body)
+        if not post:
+            return None, None, None
 
-            embed_description = f"**{notification.message}**\n\n" \
-                                f"Artist: **{post.artist.name} ({post.artist.list_name[0]})**\n" \
-                                f"Content: **{post.body}**\n" \
-                                f"Translated Content: **{translation}**"
-            embed = await self.create_embed(title=embed_title, title_desc=embed_description)
+        translation = await self.weverse_client.translate(post.id, is_post=True, p_obj=post,
+                                                          community_id=notification.community_id)
 
-            # will either be file locations or image links.
-            photos = [await self.download_weverse_post(photo.original_img_url, photo.file_name) for photo in
-                      post.photos]
+        if not translation:
+            print(f"Attempting to use Self Translation for Noti ID: {notification.id} Community ID: "
+                  f"{notification.community_id}")
+            translation = await self.translate(post.body)
 
-            videos = []
-            for video in post.videos:
-                start_loc = video.video_url.find("/video/") + 7
-                if start_loc == -1:
-                    file_name = f"{post.id}_{randint(1, 50000000)}.mp4"
-                else:
-                    file_name = video.video_url[start_loc: len(video.video_url)]
-                videos.append(await self.download_weverse_post(video.video_url, file_name))
+        embed_description = f"**{notification.message}**\n\n" \
+                            f"Artist: **{post.artist.name} ({post.artist.list_name[0]})**\n" \
+                            f"Content: **{post.body}**\n" \
+                            f"Translated Content: **{translation}**"
+        embed = await self.create_embed(title=embed_title, title_desc=embed_description)
 
-            media_files = []  # can be photos or videos
-            file_urls = []  # urls of photos or videos
-            for file in photos + videos:  # a list of lists containing the image
-                media = file[0]
-                from_host = file[1]
+        # will either be file locations or image links.
+        photos = [await self.download_weverse_post(photo.original_img_url, photo.file_name) for photo in
+                  post.photos]
 
-                if from_host:
-                    # file locations
-                    media_files.append(media)
-                else:
-                    file_urls.append(media)
+        videos = []
+        for video in post.videos:
+            start_loc = video.video_url.find("/video/") + 7
+            if start_loc == -1:
+                file_name = f"{post.id}_{randint(1, 50000000)}.mp4"
+            else:
+                file_name = video.video_url[start_loc: len(video.video_url)]
+            videos.append(await self.download_weverse_post(video.video_url, file_name))
 
-            message = "\n".join(file_urls)
-            return embed, media_files, message
-        return None, None, None
+        media_files = []  # can be photos or videos
+        file_urls = []  # urls of photos or videos
+        for file in photos + videos:  # a list of lists containing the image
+            media = file[0]
+            from_host = file[1]
+
+            if from_host:
+                # file locations
+                media_files.append(media)
+            else:
+                file_urls.append(media)
+
+        message = "\n".join(file_urls)
+        return embed, media_files, message
 
     async def set_media_embed(self, notification, embed_title):
         """Set Media Embed for Weverse."""
