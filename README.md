@@ -32,4 +32,5 @@ Open the `.env` file and change the weverse auth token, discord bot token, and p
 ^invite -> Link to invite bot.  
 ^support -> Link to support server.  
 ^ping -> Receives Client Ping.  
+^servercount -> Displays amount of servers connected to the bot.  
 

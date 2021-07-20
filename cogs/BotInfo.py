@@ -26,6 +26,11 @@ class BotInfo(commands.Cog):
         """Sends Ping."""
         return await ctx.send(f"{int(self.bot.latency * 1000)}ms")
 
+    @commands.command()
+    async def servercount(self, ctx):
+        """View amount of servers connected to bot."""
+        await ctx.send(f"I am connected to {len(self.bot.guilds)} servers.")
+
 
 def setup(bot: commands.AutoShardedBot):
     bot.add_cog(BotInfo(bot))
