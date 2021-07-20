@@ -1,4 +1,4 @@
-from typing import Optional, TYPE_CHECKING, List
+from typing import Optional, TYPE_CHECKING, List, Union
 
 import discord
 from discord.ext import commands, tasks
@@ -36,7 +36,7 @@ class Weverse(commands.Cog):
         self._upload_from_host = getenv("UPLOAD_FROM_HOST")
 
         self.weverse_client = WeverseClientAsync(**client_kwargs)
-        loop.create_task(self.weverse_client.start(create_old_posts=False))
+        loop.create_task(self.weverse_client.start(create_old_posts=False, create_media=True))
 
         if not DEV_MODE:
             self.weverse_updates.start()
@@ -210,7 +210,7 @@ class Weverse(commands.Cog):
         if not self.weverse_client.user_notifications:
             return await ctx.send("No notifications stored.")
 
-        await self.send_notification(self.weverse_client.user_notifications[0], only_channel=ctx.channel)
+        await self.send_notification(noti_object=self.weverse_client.user_notifications[0], only_channel=ctx.channel)
 
     @commands.command()
     async def role(self, ctx, role: discord.Role, *, community_name: str):
@@ -301,41 +301,60 @@ class Weverse(commands.Cog):
             return [f"{self._weverse_image_folder}{file_name}", from_host]
         return [f"https://images.irenebot.com/weverse/{file_name}", from_host]
 
-    async def set_post_embed(self, notification, embed_title):
+    async def set_post_embed(self, model_object: Union[models.Notification, models.Post, int], embed_title):
         """Set Post Embed for Weverse.
 
+        :param model_object: Notification object, Post object, or post id.
+        :param embed_title: Title of the embed.
         :returns: Embed, file locations, and image urls.
         """
-        post = self.weverse_client.get_post_by_id(notification.contents_id)
+        message = "There is a new post."
+        if isinstance(model_object, models.Notification):
+            post = self.weverse_client.get_post_by_id(model_object.contents_id)
+            message = model_object.message
+        elif isinstance(model_object, int):
+            post = self.weverse_client.get_post_by_id(model_object)
+        else:
+            post = model_object
+
         if not post:
             return None, None, None
 
+        community_id = post.artist.community_id
+
         translation = await self.weverse_client.translate(post.id, is_post=True, p_obj=post,
-                                                          community_id=notification.community_id)
+                                                          community_id=community_id)
 
         if not translation:
-            print(f"Attempting to use Self Translation for Noti ID: {notification.id} Community ID: "
-                  f"{notification.community_id}")
+            print(f"Attempting to use Self Translation for Post ID: {post.id} Community ID: "
+                  f"{community_id}")
             translation = await self.translate(post.body)
 
-        embed_description = f"**{notification.message}**\n\n" \
+        embed_description = f"**{message}**\n\n" \
                             f"Artist: **{post.artist.name} ({post.artist.list_name[0]})**\n" \
                             f"Content: **{post.body}**\n" \
                             f"Translated Content: **{translation}**"
         embed = await self.create_embed(title=embed_title, title_desc=embed_description)
 
+        media_files, message = await self.get_media_files_and_urls(post)
+
+        return embed, media_files, message
+
+    async def get_media_files_and_urls(self, main_post: Union[models.Post, models.Media]):
+        """Get media files and file urls of a post or media post."""
         # will either be file locations or image links.
         photos = [await self.download_weverse_post(photo.original_img_url, photo.file_name) for photo in
-                  post.photos]
+                  main_post.photos]
 
         videos = []
-        for video in post.videos:
-            start_loc = video.video_url.find("/video/") + 7
-            if start_loc == -1:
-                file_name = f"{post.id}_{randint(1, 50000000)}.mp4"
-            else:
-                file_name = video.video_url[start_loc: len(video.video_url)]
-            videos.append(await self.download_weverse_post(video.video_url, file_name))
+        if isinstance(main_post, models.Post):
+            for video in main_post.videos:
+                start_loc = video.video_url.find("/video/") + 7
+                if start_loc == -1:
+                    file_name = f"{main_post.id}_{randint(1, 50000000)}.mp4"
+                else:
+                    file_name = video.video_url[start_loc: len(video.video_url)]
+                videos.append(await self.download_weverse_post(video.video_url, file_name))
 
         media_files = []  # can be photos or videos
         file_urls = []  # urls of photos or videos
@@ -350,19 +369,39 @@ class Weverse(commands.Cog):
                 file_urls.append(media)
 
         message = "\n".join(file_urls)
-        return embed, media_files, message
 
-    async def set_media_embed(self, notification, embed_title):
-        """Set Media Embed for Weverse."""
-        media = self.weverse_client.get_media_by_id(notification.contents_id)
+        return media_files, message
+
+    async def set_media_embed(self, model_object: Union[models.Notification, models.Media, int], embed_title):
+        """Set Media Embed for Weverse.
+
+        :param model_object: Notification object, Media object, or media id.
+        :param embed_title: Title of the embed.
+        :returns: Embed, file locations, and image urls.
+        """
+        message = "There is a new post."
+        if isinstance(model_object, models.Notification):
+            media = self.weverse_client.get_media_by_id(model_object.contents_id)
+            message = model_object.message
+        elif isinstance(model_object, int):
+            media = self.weverse_client.get_media_by_id(model_object)
+        else:
+            media = model_object
+
         if media:
-            embed_description = f"**{notification.message}**\n\n" \
+            embed_description = f"**{message}**\n\n" \
                                 f"Title: **{media.title}**\n" \
                                 f"Content: **{media.body}**\n"
             embed = await self.create_embed(title=embed_title, title_desc=embed_description)
-            message = media.video_link
-            return embed, message
-        return None, None
+            video_link = media.video_link
+
+            media_files, message = await self.get_media_files_and_urls(media)
+
+            if video_link:
+                message = f"{message}\n{video_link}"
+
+            return embed, media_files, message
+        return None, None, None
 
     async def send_weverse_to_channel(self, channel_info: TextChannel, message_text, embed, is_comment, is_media,
                                       community_name, media=None):
@@ -416,16 +455,32 @@ class Weverse(commands.Cog):
             except Exception as e:
                 print(f"Failed to publish Message ID: {msg.id} for Channel ID: {channel_info.id} - {e}")
 
-    async def send_notification(self, notification: models.Notification, only_channel: discord.TextChannel = None):
-        """Manages a notification to be sent to a text channel.
+    async def send_notification(self, noti_object: models.Notification = None, only_channel: discord.TextChannel = None,
+                                media_object: models.Media = None, post_object: models.Post = None):
+        """Manages a notification, post, or media to be sent to a text channel.
 
-        :param notification: Notification Object
+        :param noti_object: Notification Object
         :param only_channel: Discord.py TextChannel object if it should be only sent to a specific channel.
+        :param media_object: models.Media object if there is no notification.
+        :param post_object: models.Post object if there is no notification.
         """
         is_comment = False
         is_media = False
         media = None
-        community_name = notification.community_name or notification.bold_element
+        community_name = None
+        noti_type = None
+
+        if noti_object:
+            community_name = noti_object.community_name or noti_object.bold_element
+            noti_type = self.weverse_client.determine_notification_type(noti_object.message)
+        if media_object:
+            community = self.weverse_client.get_community_by_id(media_object.community_id)
+            if community:
+                community_name = community.name
+            noti_type = "media"
+        if post_object:
+            community_name = post_object.artist.community.name
+            noti_type = "post"
 
         if not community_name:
             return
@@ -439,18 +494,18 @@ class Weverse(commands.Cog):
             print("WARNING: There were no channels to post the Weverse notification to.")
             return
 
-        noti_type = self.weverse_client.determine_notification_type(notification.message)
+        main_object = noti_object or media_object or post_object
         embed_title = f"New {community_name} Notification!"
         message_text = None
         if noti_type == 'comment':
             is_comment = True
-            embed = await self.set_comment_embed(notification, embed_title)
+            embed = await self.set_comment_embed(main_object, embed_title)
         elif noti_type == 'post':
             is_media = True
-            embed, media, message_text = await self.set_post_embed(notification, embed_title)
+            embed, media, message_text = await self.set_post_embed(main_object, embed_title)
         elif noti_type == 'media':
             is_media = True
-            embed, message_text = await self.set_media_embed(notification, embed_title)
+            embed, media, message_text = await self.set_media_embed(main_object, embed_title)
         elif noti_type == 'announcement':
             return None  # not keeping track of announcements ATM
         else:
@@ -458,9 +513,7 @@ class Weverse(commands.Cog):
 
         if not embed:
             print(f"WARNING: Could not receive Weverse information for {community_name}. "
-                  f"Noti ID:{notification.id} - "
-                  f"Contents ID: {notification.contents_id} - "
-                  f"Noti Type: {notification.contents_type}")
+                  f"Main Object ID:{main_object.id}.")
             return  # we do not want constant attempts to send a message.
 
         for channel_info in channels:
@@ -471,10 +524,10 @@ class Weverse(commands.Cog):
                     channel_info: TextChannel = channel_info  # for typing
                     await sleep(2)
 
-                    if notification.id in channel_info.already_posted:
+                    if main_object.id in channel_info.already_posted:
                         continue
 
-                    channel_info.already_posted.append(notification.id)
+                    channel_info.already_posted.append(main_object.id)
 
                 print(f"Sending post for {community_name} to text channel {channel_info.id}.")
                 await self.send_weverse_to_channel(channel_info, message_text, embed, is_comment, is_media,
@@ -497,7 +550,7 @@ class Weverse(commands.Cog):
             for notification in self.weverse_client.get_new_notifications():
                 try:
                     print(f"Found new notification: {notification.id}.")
-                    await self.send_notification(notification)
+                    await self.send_notification(noti_object=notification)
                 except Exception as e:
                     print(e)
         except Exception as e:

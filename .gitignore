@@ -6,3 +6,4 @@ venv/
 *token.json
 *credentials.json
 *.pickle
+photos/
