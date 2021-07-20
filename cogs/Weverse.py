@@ -36,7 +36,7 @@ class Weverse(commands.Cog):
         self._upload_from_host = getenv("UPLOAD_FROM_HOST")
 
         self.weverse_client = WeverseClientAsync(**client_kwargs)
-        loop.create_task(self.weverse_client.start(create_old_posts=False, create_media=True))
+        loop.create_task(self.weverse_client.start(create_old_posts=False, create_media=False))
 
         if not DEV_MODE:
             self.weverse_updates.start()
