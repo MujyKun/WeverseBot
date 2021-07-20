@@ -1,4 +1,4 @@
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, List
 
 import discord
 from discord.ext import commands, tasks
@@ -368,15 +368,17 @@ class Weverse(commands.Cog):
             return  # if the user has the post disabled, we should not post it.
 
         try:
-            channel = self.bot.get_channel(channel_info.id)
+            channel: discord.TextChannel = self.bot.get_channel(channel_info.id)
             if not channel:
                 # fetch channel instead (assuming discord.py cache did not load)
-                channel = await self.bot.fetch_channel(channel_info.id)
-        except:
+                channel: discord.TextChannel = await self.bot.fetch_channel(channel_info.id)
+        except Exception as e:
             # remove the channel from future updates as it cannot be found.
+            print(f"{e} - Removing Text Channel {channel_info.id} from cache for {community_name} since it could not "
+                  f"be processed/found.")
             return await self.delete_channel(channel_info.id, community_name.lower())
 
-        msg_list = []
+        msg_list: List[discord.Message] = []
         file_list = []
 
         try:
@@ -401,6 +403,15 @@ class Weverse(commands.Cog):
         except Exception as e:
             print(f"{e} (Exception) - Weverse Post Failed to {channel_info.id} for {community_name}")
             return
+
+        if not channel.is_news():
+            return
+
+        for msg in msg_list:
+            try:
+                await msg.publish()
+            except Exception as e:
+                print(f"Failed to publish Message ID: {msg.id} for Channel ID: {channel_info.id} - {e}")
 
     async def send_notification(self, notification: models.Notification, only_channel: discord.TextChannel = None):
         """Manages a notification to be sent to a text channel.
