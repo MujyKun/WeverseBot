@@ -207,7 +207,7 @@ class Weverse(commands.Cog):
         if not self.weverse_client.user_notifications:
             return await ctx.send("No notifications stored.")
 
-        await self.send_notification(self.weverse_client.user_notifications[0])
+        await self.send_notification(self.weverse_client.user_notifications[0], only_channel=ctx.channel)
 
     @commands.command()
     async def role(self, ctx, role: discord.Role, *, community_name: str):
@@ -402,8 +402,12 @@ class Weverse(commands.Cog):
             print(f"{e} (Exception) - Weverse Post Failed to {channel_info.id} for {community_name}")
             return
 
-    async def send_notification(self, notification: models.Notification):
-        """Manages a notification to be sent to a text channel."""
+    async def send_notification(self, notification: models.Notification, only_channel: discord.TextChannel = None):
+        """Manages a notification to be sent to a text channel.
+
+        :param notification: Notification Object
+        :param only_channel: Discord.py TextChannel object if it should be only sent to a specific channel.
+        """
         is_comment = False
         is_media = False
         media = None
@@ -447,13 +451,16 @@ class Weverse(commands.Cog):
 
         for channel_info in channels:
             try:
-                channel_info: TextChannel = channel_info  # for typing
-                await sleep(2)
+                if only_channel:
+                    channel_info = TextChannel(only_channel.id, 123, True, True)
+                else:
+                    channel_info: TextChannel = channel_info  # for typing
+                    await sleep(2)
 
-                if notification.id in channel_info.already_posted:
-                    continue
+                    if notification.id in channel_info.already_posted:
+                        continue
 
-                channel_info.already_posted.append(notification.id)
+                    channel_info.already_posted.append(notification.id)
 
                 print(f"Sending post for {community_name} to text channel {channel_info.id}.")
                 await self.send_weverse_to_channel(channel_info, message_text, embed, is_comment, is_media,
