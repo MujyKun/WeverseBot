@@ -181,12 +181,9 @@ class Weverse(commands.Cog):
     async def media(self, ctx, *, community_name):
         """Toggle Media Status for a Community."""
         community_name = community_name.lower()
-        if not self.check_community_exists(community_name):
-            return await self.send_communities_available(ctx)
-
-        text_channel = self.get_channel(community_name, ctx.channel.id)
+        text_channel = await self.get_channel_following(ctx, community_name)
         if not text_channel:
-            return await ctx.send(f"This channel is not currently following {community_name}.")
+            return
 
         await self.bot.conn.toggle_media(ctx.channel.id, community_name, text_channel.media_enabled)
         text_channel.media_enabled = not text_channel.media_enabled
@@ -198,12 +195,10 @@ class Weverse(commands.Cog):
         """Toggle Comments Status for a Community."""
         try:
             community_name = community_name.lower()
-            if not self.check_community_exists(community_name):
-                return await self.send_communities_available(ctx)
-
-            text_channel = self.get_channel(community_name, ctx.channel.id)
+            text_channel = await self.get_channel_following(ctx, community_name)
             if not text_channel:
-                return await ctx.send(f"This channel is not currently following {community_name}.")
+                return
+
             await self.bot.conn.toggle_comments(ctx.channel.id, community_name, text_channel.comments_enabled)
             text_channel.comments_enabled = not text_channel.comments_enabled
             return await ctx.send(f"You will now{' no longer' if not text_channel.comments_enabled else ''} receive "
@@ -224,12 +219,10 @@ class Weverse(commands.Cog):
     async def role(self, ctx, role: discord.Role, *, community_name: str):
         """Add a role to be notified when a community posts."""
         community_name = community_name.lower()
-        if not self.check_community_exists(community_name):
-            return await self.send_communities_available(ctx)
-
-        text_channel = self.get_channel(community_name, ctx.channel.id)
+        text_channel = await self.get_channel_following(ctx, community_name)
         if not text_channel:
-            return await ctx.send(f"This channel is not currently following {community_name}.")
+            return
+
         if text_channel.role_id and text_channel.role_id == role.id:
             text_channel.role_id = None
             await self.bot.conn.update_role(ctx.channel.id, community_name, None)
@@ -243,6 +236,24 @@ class Weverse(commands.Cog):
         """Retrieves a random hex color."""
         r = lambda: randint(0, 255)
         return int(('%02X%02X%02X' % (r(), r(), r())), 16)  # must be specified to base 16 since 0x is not present
+
+    async def get_channel_following(self, ctx, community_name) -> Optional[TextChannel]:
+        """Gets the channel that is following a community.
+
+        If the community does not exist, a list of communities will be sent instead.
+
+        :param ctx: Context Object
+        :param community_name: Community Name
+        :returns: Optional[models.TextChannel]
+        """
+        if not self.check_community_exists(community_name):
+            await self.send_communities_available(ctx)
+            return
+
+        text_channel = self.get_channel(community_name, ctx.channel.id)
+        if not text_channel:
+            await ctx.send(f"This channel is not currently following {community_name}.")
+        return text_channel
 
     async def create_embed(self, title="Weverse", color=None, title_desc=None,
                            footer_desc="Thanks for using WeverseBot!", icon_url=None, footer_url=None, title_url=None):
