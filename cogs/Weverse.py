@@ -256,7 +256,8 @@ class Weverse(commands.Cog):
         return text_channel
 
     async def create_embed(self, title="Weverse", color=None, title_desc=None,
-                           footer_desc="Thanks for using WeverseBot!", icon_url=None, footer_url=None, title_url=None):
+                           footer_desc="Thanks for using WeverseBot!", icon_url=None, footer_url=None, title_url=None,
+                           image_url=None):
         """Create a discord Embed."""
         from discord.embeds import EmptyEmbed
         icon_url = icon_url
@@ -269,6 +270,7 @@ class Weverse(commands.Cog):
         embed.set_author(name="Weverse", url="https://www.patreon.com/mujykun?fan_landing=true",
                          icon_url=icon_url or EmptyEmbed)
         embed.set_footer(text=footer_desc, icon_url=footer_url or EmptyEmbed)
+        embed.set_image(url=image_url or EmptyEmbed)
         return embed
 
     async def set_comment_embed(self, notification, embed_title):
@@ -391,6 +393,50 @@ class Weverse(commands.Cog):
 
         return media_files, message
 
+    async def set_announcement_embed(self, model_object: Union[models.Notification, models.Announcement, int]):
+        """Set Announcement Embed for Weverse.
+
+        :param model_object: Notification object, Announcement object, or Announcement id.
+        :returns: Embed, file locations, and image urls.
+        """
+        message = "There is a new announcement."
+        if isinstance(model_object, models.Notification):
+            announcement = self.weverse_client.get_announcement_by_id(model_object.contents_id)
+            message = model_object.message
+        elif isinstance(model_object, int):
+            announcement = self.weverse_client.get_media_by_id(model_object)
+        else:
+            announcement = model_object
+
+        if not announcement:
+            return
+
+        print(f"Attempting to use Self Translation for Announcement ID: {announcement.id} Community ID: "
+              f"{announcement.community_id}")
+        translation = await self.translate(str(announcement))
+
+        embed_description = f"**{message}**\n\n" \
+                            f"Content: **{str(announcement)}**\n\n" \
+                            f"Translated Content: {translation}"
+
+        # create list of strings to split off into embeds.
+        desc_list: List[str] = []
+        cap = 1600
+        while len(embed_description) >= cap:
+            desc_list.append(embed_description[0:cap])
+            embed_description = embed_description[cap:len(embed_description)]
+
+        if embed_description:
+            desc_list.append(embed_description[0:len(embed_description)])
+
+        embed_list = []
+        for count, desc in enumerate(desc_list, 1):
+            embed_list.append(await self.create_embed(title=f"{announcement.title} - Post #{count}/{len(desc_list)}",
+                                                      title_desc=desc,
+                                                      image_url=announcement.image_url if count == 1 else None))
+
+        return embed_list
+
     async def set_media_embed(self, model_object: Union[models.Notification, models.Media, int], embed_title):
         """Set Media Embed for Weverse.
 
@@ -422,12 +468,16 @@ class Weverse(commands.Cog):
             return embed, media_files, message
         return None, None, None
 
-    async def send_weverse_to_channel(self, channel_info: TextChannel, message_text, embed, is_comment, is_media,
-                                      community_name, media=None):
+    async def send_weverse_to_channel(self, channel_info: TextChannel, message_text,
+                                      embed_list: Union[discord.Embed, List[discord.Embed]], is_comment,
+                                      is_media, community_name, media=None):
         """Send a weverse post to a channel."""
         if (is_comment and not channel_info.comments_enabled) or (is_media and not channel_info.media_enabled):
             return  # if the user has the post disabled, we should not post it.
 
+        if isinstance(embed_list, discord.Embed):
+            # make the individual into a list
+            embed_list = [embed_list]
         try:
             channel: discord.TextChannel = self.bot.get_channel(channel_info.id)
             if not channel:
@@ -444,7 +494,8 @@ class Weverse(commands.Cog):
 
         try:
             mention_role = f"<@&{channel_info.role_id}>" if channel_info.role_id else None
-            msg_list.append(await channel.send(mention_role, embed=embed))
+            for count, embed in enumerate(embed_list, 1):
+                msg_list.append(await channel.send(mention_role if count == 1 else None, embed=embed))
             if message_text or media:
                 # Since an embed already exists, any individual content will not load
                 # as an embed -> Make it it's own message.
@@ -475,28 +526,36 @@ class Weverse(commands.Cog):
                 print(f"Failed to publish Message ID: {msg.id} for Channel ID: {channel_info.id} - {e}")
 
     async def send_notification(self, noti_object: models.Notification = None, only_channel: discord.TextChannel = None,
-                                media_object: models.Media = None, post_object: models.Post = None):
+                                media_object: models.Media = None, post_object: models.Post = None,
+                                announcement_object: models.Announcement = None):
         """Manages a notification, post, or media to be sent to a text channel.
 
         :param noti_object: Notification Object
         :param only_channel: Discord.py TextChannel object if it should be only sent to a specific channel.
         :param media_object: models.Media object if there is no notification.
         :param post_object: models.Post object if there is no notification.
+        :param announcement_object: models.Announcement object if there is no notification.
         """
         is_comment = False
         is_media = False
         media = None
         community_name = None
         noti_type = None
+        embed = None
+        embed_list = []
 
         if noti_object:
             community_name = noti_object.community_name or noti_object.bold_element
             noti_type = self.weverse_client.determine_notification_type(noti_object.message)
-        if media_object:
-            community = self.weverse_client.get_community_by_id(media_object.community_id)
+        if media_object or announcement_object:
+            try:
+                community = self.weverse_client.get_community_by_id(media_object.community_id)
+            except AttributeError:
+                community = self.weverse_client.get_community_by_id(announcement_object.community_id)
+
             if community:
                 community_name = community.name
-            noti_type = "media"
+            noti_type = "media" if media_object else "announcement"
         if post_object:
             community_name = post_object.artist.community.name
             noti_type = "post"
@@ -513,7 +572,7 @@ class Weverse(commands.Cog):
             print("WARNING: There were no channels to post the Weverse notification to.")
             return
 
-        main_object = noti_object or media_object or post_object
+        main_object = noti_object or media_object or post_object or announcement_object
         embed_title = f"New {community_name} Notification!"
         message_text = None
         if noti_type == 'comment':
@@ -526,11 +585,11 @@ class Weverse(commands.Cog):
             is_media = True
             embed, media, message_text = await self.set_media_embed(main_object, embed_title)
         elif noti_type == 'announcement':
-            return None  # not keeping track of announcements ATM
+            embed_list = await self.set_announcement_embed(main_object)
         else:
             return None
 
-        if not embed:
+        if not embed and not embed_list:
             print(f"WARNING: Could not receive Weverse information for {community_name}. "
                   f"Main Object ID:{main_object.id}.")
             return  # we do not want constant attempts to send a message.
@@ -549,7 +608,7 @@ class Weverse(commands.Cog):
                     channel_info.already_posted.append(main_object.id)
 
                 print(f"Sending post for {community_name} to text channel {channel_info.id}.")
-                await self.send_weverse_to_channel(channel_info, message_text, embed, is_comment, is_media,
+                await self.send_weverse_to_channel(channel_info, message_text, embed or embed_list, is_comment, is_media,
                                                    community_name, media=media)
             except Exception as e:
                 print(f"{e} - Failed to send to channel.")
