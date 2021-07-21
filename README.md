@@ -2,9 +2,7 @@
 
 ## [Invite to your Server](https://discord.com/oauth2/authorize?client_id=864670527187451914&scope=bot&permissions=2952997936)
 
-<a href="https://top.gg/bot/864670527187451914">
-  <img src="https://top.gg/api/widget/864670527187451914.svg" alt="Weverse" />
-  </a>
+[![Discord Bots](https://top.gg/api/widget/864670527187451914.svg)](https://top.gg/bot/864670527187451914)
 
 ## To Self-Host:
 
