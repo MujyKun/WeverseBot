@@ -16,7 +16,7 @@ class WeverseBot(AutoShardedBot):
         self.conn: AbstractDataBase = PostgreSQL(**options.get("db_kwargs"))  # db connection
 
         top_gg_key = getenv("TOP_GG_KEY")
-        self.top_gg_client: Optional[DBLClient] = None if not top_gg_key else DBLClient(bot, top_gg_key, autopost=True)
+        self.top_gg_client: Optional[DBLClient] = None if not top_gg_key else DBLClient(self, top_gg_key, autopost=True)
 
     async def on_command_error(self, context, exception):
         if isinstance(exception, errors.CommandNotFound):
