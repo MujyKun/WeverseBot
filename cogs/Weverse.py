@@ -140,6 +140,14 @@ class Weverse(commands.Cog):
             pass
         await self.bot.conn.delete_weverse_channel(channel_id, community_name)
 
+    @commands.command()
+    async def list(self, ctx):
+        """List the communities the current channel is following."""
+        followed_communities = [community_name for community_name in self.get_community_names() if
+                                self.is_following(community_name, ctx.channel.id)]
+        msg_string = f"You are currently following `{', '.join(followed_communities)}`."
+        return await ctx.send(msg_string)
+
     @commands.command(aliases=["updates"])
     async def weverse(self, ctx, *, community_name: str = None):
         """Follow or Unfollow a Weverse Community."""

@@ -27,10 +27,11 @@ Open the `.env` file and change the weverse auth token, discord bot token, and p
 ^media (Community Name) -> Will enable/disable the media from that community.  
 ^comments (Community Name) -> Will enable/disable the comments from that community.  
 ^role (Role) (Community Name) -> Will add or update a role to mention for a community.  
+^list -> Will list the currently followed communities in the channel.  
 
 ^patreon -> Link to patreon.  
 ^invite -> Link to invite bot.  
 ^support -> Link to support server.  
 ^ping -> Receives Client Ping.  
-^servercount -> Displays amount of servers connected to the bot.  
+^servercount -> Displays amount of servers connected to the bot.
 
