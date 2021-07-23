@@ -585,6 +585,7 @@ class Weverse(commands.Cog):
             is_media = True
             embed, media, message_text = await self.set_media_embed(main_object, embed_title)
         elif noti_type == 'announcement':
+            is_media = True
             embed_list = await self.set_announcement_embed(main_object)
         else:
             return None
