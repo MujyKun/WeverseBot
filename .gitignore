@@ -7,3 +7,4 @@ venv/
 *credentials.json
 *.pickle
 photos/
+.vscode/

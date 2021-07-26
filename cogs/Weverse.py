@@ -53,8 +53,8 @@ class Weverse(commands.Cog):
         try:
             data = {
                 'text': text,
-                'src_lang': "KR",
-                'target_lang': "EN",
+                'src_lang': "ko",
+                'target_lang': "en",
             }
             async with self._web_session.post(self._translate_endpoint, headers=self._translate_headers, data=data) \
                     as r:
