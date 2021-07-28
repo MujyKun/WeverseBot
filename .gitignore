@@ -1,4 +1,4 @@
-.env.example
+.env
 *.log
 *__pycache__/
 venv/

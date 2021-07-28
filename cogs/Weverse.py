@@ -141,6 +141,7 @@ class Weverse(commands.Cog):
         await self.bot.conn.delete_weverse_channel(channel_id, community_name)
 
     @commands.command()
+    @commands.has_guild_permissions(manage_messages=True)
     async def list(self, ctx):
         """List the communities the current channel is following."""
         followed_communities = [community_name for community_name in self.get_community_names() if
@@ -149,6 +150,7 @@ class Weverse(commands.Cog):
         return await ctx.send(msg_string)
 
     @commands.command(aliases=["updates"])
+    @commands.has_guild_permissions(manage_messages=True)
     async def weverse(self, ctx, *, community_name: str = None):
         """Follow or Unfollow a Weverse Community."""
         try:
@@ -178,6 +180,7 @@ class Weverse(commands.Cog):
             return await ctx.send(e)
 
     @commands.command()
+    @commands.has_guild_permissions(manage_messages=True)
     async def media(self, ctx, *, community_name):
         """Toggle Media Status for a Community."""
         community_name = community_name.lower()
@@ -191,6 +194,7 @@ class Weverse(commands.Cog):
                               f"media posts for this community.")
 
     @commands.command()
+    @commands.has_guild_permissions(manage_messages=True)
     async def comments(self, ctx, *, community_name):
         """Toggle Comments Status for a Community."""
         try:
@@ -216,6 +220,7 @@ class Weverse(commands.Cog):
         await self.send_notification(noti_object=self.weverse_client.user_notifications[0], only_channel=ctx.channel)
 
     @commands.command()
+    @commands.has_guild_permissions(manage_messages=True)
     async def role(self, ctx, role: discord.Role, *, community_name: str):
         """Add a role to be notified when a community posts."""
         community_name = community_name.lower()
