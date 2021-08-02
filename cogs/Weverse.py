@@ -26,8 +26,12 @@ class Weverse(commands.Cog):
         client_kwargs = {
             "verbose": True,  # Will print warning messages for links that have failed to connect or were not found.
             "web_session": self._web_session,  # Existing web session
-            "authorization": getenv("WEVERSE_TOKEN"),  # Auth Token to connect to Weverse
-            "loop": loop  # current event loop
+            # Auth Token to connect to Weverse. Not needed if user and pass is provided.
+            "authorization": getenv("WEVERSE_TOKEN"),
+            "username": getenv("WEVERSE_USERNAME") or None,  # username to log in
+            "password": getenv("WEVERSE_PASSWORD") or None,  # password to log in
+            "loop": loop,  # current event loop
+            'hook': self.on_new_notifications
         }
 
         self._translate_headers = {"Authorization": getenv("TRANSLATION_KEY")}
@@ -36,10 +40,14 @@ class Weverse(commands.Cog):
         self._upload_from_host = getenv("UPLOAD_FROM_HOST")
 
         self.weverse_client = WeverseClientAsync(**client_kwargs)
-        loop.create_task(self.weverse_client.start(create_old_posts=False, create_media=False))
+        loop.create_task(self.weverse_client.start(create_old_posts=True, create_media=True))
 
+        """
+        # switched to hooks.
+        
         if not DEV_MODE:
             self.weverse_updates.start()
+        """
 
     async def cog_check(self, ctx):
         """A local check for this cog. Checks if the user is a data mod."""
@@ -217,7 +225,13 @@ class Weverse(commands.Cog):
         if not self.weverse_client.user_notifications:
             return await ctx.send("No notifications stored.")
 
-        await self.send_notification(noti_object=self.weverse_client.user_notifications[0], only_channel=ctx.channel)
+        for noti in self.weverse_client.user_notifications:
+            try:
+                noti_type = self.weverse_client.determine_notification_type(noti.message)
+                if noti_type == "comment":
+                    await self.send_notification(noti_object=noti, only_channel=ctx.channel)
+            except Exception as e:
+                print(e)
 
     @commands.command()
     @commands.has_guild_permissions(manage_messages=True)
@@ -293,7 +307,6 @@ class Weverse(commands.Cog):
                 return
         translation = await self.weverse_client.translate(notification.contents_id, is_comment=True,
                                                           community_id=notification.community_id)
-
         if not translation:
             print(f"Attempting to use Self Translation for Noti ID: {notification.id} Community ID: "
                   f"{notification.community_id}")
@@ -603,7 +616,7 @@ class Weverse(commands.Cog):
         for channel_info in channels:
             try:
                 if only_channel:
-                    channel_info = TextChannel(only_channel.id, 123, True, True)
+                    channel_info = TextChannel(only_channel.id, 755505173723480228, True, True)
                 else:
                     channel_info: TextChannel = channel_info  # for typing
                     await sleep(2)
@@ -619,6 +632,17 @@ class Weverse(commands.Cog):
             except Exception as e:
                 print(f"{e} - Failed to send to channel.")
 
+    async def on_new_notifications(self, notifications: List[models.Notification]):
+        """Hook method for new notifications."""
+        for notification in notifications:
+            try:
+                print(f"Found new notification: {notification.id}.")
+                await self.send_notification(noti_object=notification)
+            except Exception as e:
+                print(e)
+
+    """
+    # we have swapped to using hooks.
     @tasks.loop(seconds=45, minutes=0, hours=0, reconnect=True)
     async def weverse_updates(self):
         try:
@@ -639,6 +663,7 @@ class Weverse(commands.Cog):
                     print(e)
         except Exception as e:
             print(e)
+    """
 
 
 def setup(bot: commands.AutoShardedBot):
