@@ -43,45 +43,12 @@ class Weverse(commands.Cog):
         self.weverse_client = WeverseClientAsync(**client_kwargs)
         loop.create_task(self.weverse_client.start(create_old_posts=False, create_media=False))
 
-        loop.create_task(self.test())
-
         """ 
         # switched to hooks.
         
         if not DEV_MODE:
             self.weverse_updates.start()
         """
-
-    async def test(self):
-        import json
-        data = json.load(open('x.json', encoding="utf-8"))
-        from Weverse.objects import create_media_object, create_post_objects, create_community_objects
-        # media = create_media_object(data.get('media'))
-        # community = self.weverse_client.get_community_by_id(data['community']['id'])
-        # post = create_post_objects([data], community)
-
-        # class FakeData:
-        #     def __init__(self):
-        #         self.community = community
-        #         self.community_id = community.id
-        #         # f"Artist: **{post.artist.name} ({post.artist.list_name[0]})**\n" \
-        #         self.name = "TEST"
-        #         self.list_name = ["FAKE_TEST"]
-
-        # post[0].artist = FakeData()
-
-        # await self.send_notification(media_object=media, only_channel=channel)
-        # await self.send_notification(post_object=post[0], only_channel=channel)
-        # community_name = post_object.artist.community.name
-        while True:
-            await asyncio.sleep(2)
-            if self.weverse_client.cache_loaded:
-                notifications = self.weverse_client.user_notifications
-                noti_obj = notifications[0]
-                channel = self.bot.get_channel(689693501600038919)
-                await self.weverse_client._manage_notification_posts(noti_obj)
-                await self.send_notification(noti_object=noti_obj, only_channel=channel)
-        ...
 
     async def cog_check(self, ctx):
         """A local check for this cog. Checks if the user is a data mod."""
