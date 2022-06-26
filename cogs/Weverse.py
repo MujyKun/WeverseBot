@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional, TYPE_CHECKING, List, Union
 
 import discord
@@ -42,12 +43,45 @@ class Weverse(commands.Cog):
         self.weverse_client = WeverseClientAsync(**client_kwargs)
         loop.create_task(self.weverse_client.start(create_old_posts=False, create_media=False))
 
-        """
+        loop.create_task(self.test())
+
+        """ 
         # switched to hooks.
         
         if not DEV_MODE:
             self.weverse_updates.start()
         """
+
+    async def test(self):
+        import json
+        data = json.load(open('x.json', encoding="utf-8"))
+        from Weverse.objects import create_media_object, create_post_objects, create_community_objects
+        # media = create_media_object(data.get('media'))
+        # community = self.weverse_client.get_community_by_id(data['community']['id'])
+        # post = create_post_objects([data], community)
+
+        # class FakeData:
+        #     def __init__(self):
+        #         self.community = community
+        #         self.community_id = community.id
+        #         # f"Artist: **{post.artist.name} ({post.artist.list_name[0]})**\n" \
+        #         self.name = "TEST"
+        #         self.list_name = ["FAKE_TEST"]
+
+        # post[0].artist = FakeData()
+
+        # await self.send_notification(media_object=media, only_channel=channel)
+        # await self.send_notification(post_object=post[0], only_channel=channel)
+        # community_name = post_object.artist.community.name
+        while True:
+            await asyncio.sleep(2)
+            if self.weverse_client.cache_loaded:
+                notifications = self.weverse_client.user_notifications
+                noti_obj = notifications[0]
+                channel = self.bot.get_channel(689693501600038919)
+                await self.weverse_client._manage_notification_posts(noti_obj)
+                await self.send_notification(noti_object=noti_obj, only_channel=channel)
+        ...
 
     async def cog_check(self, ctx):
         """A local check for this cog. Checks if the user is a data mod."""
@@ -90,7 +124,7 @@ class Weverse(commands.Cog):
         await self.update_db_struct_from_cache()
 
     async def update_db_struct_from_cache(self):
-        """Will destroy the current db and update it's structure and reinsert values from the current cache."""
+        """Will destroy the current db and update its structure and reinsert values from the current cache."""
         await self.bot.conn.recreate_db()
         for key, channels in self._channels.items():
             for channel in channels.values():
@@ -294,18 +328,17 @@ class Weverse(commands.Cog):
 
     async def set_comment_embed(self, notification, embed_title):
         """Set Comment Embed for Weverse."""
-        comment_body = await self.weverse_client.fetch_comment_body(notification.community_id,
-                                                                    notification.contents_id)
-        if not comment_body:
-            artist_comments = await self.weverse_client.fetch_artist_comments(notification.community_id,
-                                                                              notification.contents_id)
-            if artist_comments:
-                comment_body = (artist_comments[0]).body
-            else:
-                print(f"Could not find a comment body for Noti ID: {notification.id} Community ID: "
-                      f"{notification.community_id}")
-                return
-        translation = await self.weverse_client.translate(notification.contents_id, is_comment=True,
+        post = self.weverse_client.get_post_by_id(notification.contents_id)
+        if post and post.artist_comments:
+            post_comments = post.artist_comments
+        else:
+            post_comments = await self.weverse_client.fetch_artist_comments(notification.community_id,
+                                                                            notification.contents_id)
+
+        comment = post_comments[0]
+        comment_body = comment.body
+
+        translation = await self.weverse_client.translate(comment.id, is_comment=True,
                                                           community_id=notification.community_id)
         if not translation:
             print(f"Attempting to use Self Translation for Noti ID: {notification.id} Community ID: "
@@ -316,7 +349,7 @@ class Weverse(commands.Cog):
                             f"Content: **{comment_body}**\n" \
                             f"Translated Content: **{translation}**"
         embed = await self.create_embed(title=embed_title, title_desc=embed_description)
-        return embed
+        return embed, comment
 
     async def download_weverse_post(self, url, file_name):
         """Downloads an image url and returns image host url.
@@ -554,6 +587,7 @@ class Weverse(commands.Cog):
         :param post_object: models.Post object if there is no notification.
         :param announcement_object: models.Announcement object if there is no notification.
         """
+        comment = None
         is_comment = False
         is_media = False
         media = None
@@ -573,7 +607,7 @@ class Weverse(commands.Cog):
 
             if community:
                 community_name = community.name
-            noti_type = "media" if media_object else "announcement"
+            noti_type = "media" if repr(media_object) else "announcement"
         if post_object:
             community_name = post_object.artist.community.name
             noti_type = "post"
@@ -582,20 +616,23 @@ class Weverse(commands.Cog):
             return
 
         channels = self._channels.get(community_name.lower())
-        if not channels:
+        if not channels and not only_channel:
             return
 
-        channels = (channels.copy()).values()  # copy to prevent size change during iteration.
-        if not channels:
-            print("WARNING: There were no channels to post the Weverse notification to.")
-            return
+        if not only_channel:
+            channels = (channels.copy()).values()  # copy to prevent size change during iteration.
+            if not channels:
+                print("WARNING: There were no channels to post the Weverse notification to.")
+                return
+        else:
+            channels = [TextChannel(only_channel.id, 755505173723480228, True, True)]
 
         main_object = noti_object or media_object or post_object or announcement_object
         embed_title = f"New {community_name} Notification!"
         message_text = None
         if noti_type == 'comment':
             is_comment = True
-            embed = await self.set_comment_embed(main_object, embed_title)
+            embed, comment = await self.set_comment_embed(main_object, embed_title)
         elif noti_type == 'post':
             is_media = True
             embed, media, message_text = await self.set_post_embed(main_object, embed_title)
@@ -615,17 +652,14 @@ class Weverse(commands.Cog):
 
         for channel_info in channels:
             try:
-                if only_channel:
-                    channel_info = TextChannel(only_channel.id, 755505173723480228, True, True)
-                else:
-                    channel_info: TextChannel = channel_info  # for typing
-                    await sleep(2)
+                channel_info: TextChannel = channel_info  # for typing
+                await sleep(2)
 
-                    if main_object.id in channel_info.already_posted:
-                        continue
+                id_to_check = main_object.id if not is_comment else comment.id
+                if id_to_check in channel_info.already_posted:
+                    continue
 
-                    channel_info.already_posted.append(main_object.id)
-
+                channel_info.already_posted.append(id_to_check)
                 print(f"Sending post for {community_name} to text channel {channel_info.id}.")
                 await self.send_weverse_to_channel(channel_info, message_text, embed or embed_list, is_comment, is_media,
                                                    community_name, media=media)
