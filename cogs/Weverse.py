@@ -42,6 +42,7 @@ class Weverse(commands.Cog):
 
         self.weverse_client = WeverseClientAsync(**client_kwargs)
         loop.create_task(self.weverse_client.start(create_old_posts=False, create_media=False))
+        # loop.create_task(self.test())
 
         """ 
         # switched to hooks.
@@ -49,6 +50,18 @@ class Weverse(commands.Cog):
         if not DEV_MODE:
             self.weverse_updates.start()
         """
+
+    async def test(self):
+        while not self.weverse_client.cache_loaded:
+            print("Sleeping...")
+            await sleep(3)
+
+        only_channel = self.bot.get_channel(689693501600038919)
+        from json import load
+        data = load(open("x.json", encoding='utf-8'))
+        from Weverse.objects import create_media_object
+        media_obj = create_media_object(data['media'])
+        await self.send_notification(media_object=media_obj, only_channel=only_channel)
 
     async def cog_check(self, ctx):
         """A local check for this cog. Checks if the user is a data mod."""
@@ -84,7 +97,6 @@ class Weverse(commands.Cog):
             await sleep(3)  # give time for DataBase connection to establish and properly create tables/schemas.
         for channel_id, community_name, role_id, media_enabled, comments_enabled \
                 in await self.bot.conn.fetch_channels():
-
             self.add_to_cache(community_name, channel_id, role_id, media_enabled, comments_enabled)
 
         # recreate the db (to match a new structure) and insert values from cache.
@@ -375,7 +387,7 @@ class Weverse(commands.Cog):
                             f"Translated Content: **{translation}**"
         embed = await self.create_embed(title=embed_title, title_desc=embed_description)
 
-        media_files, message = await self.get_media_files_and_urls(post)
+        media_files, message, _ = await self.get_media_files_and_urls(post)
 
         return embed, media_files, message
 
@@ -394,6 +406,13 @@ class Weverse(commands.Cog):
                 else:
                     file_name = video.video_url[start_loc: len(video.video_url)]
                 videos.append(await self.download_weverse_post(video.video_url, file_name))
+        video_file_paths = []
+        if isinstance(main_post, models.Media):
+            for video in main_post.videos:
+                if isinstance(video, models.VideoStream):
+                    file_location = f"./{video.video_id}_{randint(1, 50000000)}.mp4"
+                    await self.weverse_client.download_video_stream(video, output_file_path=file_location)
+                    video_file_paths.append(file_location)
 
         media_files = []  # can be photos or videos
         file_urls = []  # urls of photos or videos
@@ -409,7 +428,7 @@ class Weverse(commands.Cog):
 
         message = "\n".join(file_urls)
 
-        return media_files, message
+        return media_files, message, video_file_paths
 
     async def set_announcement_embed(self, model_object: Union[models.Notification, models.Announcement, int]):
         """Set Announcement Embed for Weverse.
@@ -478,17 +497,17 @@ class Weverse(commands.Cog):
             embed = await self.create_embed(title=embed_title, title_desc=embed_description)
             video_link = media.video_link
 
-            media_files, message = await self.get_media_files_and_urls(media)
+            media_files, message, video_file_paths = await self.get_media_files_and_urls(media)
 
             if video_link:
                 message = f"{message}\n{video_link}"
 
-            return embed, media_files, message
+            return embed, media_files, message, video_file_paths
         return None, None, None
 
     async def send_weverse_to_channel(self, channel_info: TextChannel, message_text,
                                       embed_list: Union[discord.Embed, List[discord.Embed]], is_comment,
-                                      is_media, community_name, media=None):
+                                      is_media, community_name, media=None, video_file_paths=None):
         """Send a weverse post to a channel."""
         if (is_comment and not channel_info.comments_enabled) or (is_media and not channel_info.media_enabled):
             return  # if the user has the post disabled, we should not post it.
@@ -534,6 +553,14 @@ class Weverse(commands.Cog):
             print(f"{e} (Exception) - Weverse Post Failed to {channel_info.id} for {community_name}")
             return
 
+        if video_file_paths:
+            for video_file_path in video_file_paths:
+                try:
+                    file = discord.File(video_file_path)
+                    await channel.send(file=file)
+                except Exception as e:
+                    print(f"Failed to upload local videos to channel {channel.id} - ERROR {e}")
+
         if not channel.is_news():
             return
 
@@ -561,6 +588,7 @@ class Weverse(commands.Cog):
         community_name = None
         noti_type = None
         embed = None
+        video_file_paths = []
         embed_list = []
 
         if noti_object:
@@ -605,7 +633,7 @@ class Weverse(commands.Cog):
             embed, media, message_text = await self.set_post_embed(main_object, embed_title)
         elif noti_type == 'media':
             is_media = True
-            embed, media, message_text = await self.set_media_embed(main_object, embed_title)
+            embed, media, message_text, video_file_paths = await self.set_media_embed(main_object, embed_title)
         elif noti_type == 'announcement':
             is_media = True
             embed_list = await self.set_announcement_embed(main_object)
@@ -628,10 +656,13 @@ class Weverse(commands.Cog):
 
                 channel_info.already_posted.append(id_to_check)
                 print(f"Sending post for {community_name} to text channel {channel_info.id}.")
-                await self.send_weverse_to_channel(channel_info, message_text, embed or embed_list, is_comment, is_media,
-                                                   community_name, media=media)
+                await self.send_weverse_to_channel(channel_info, message_text, embed or embed_list, is_comment,
+                                                   is_media,
+                                                   community_name, media=media, video_file_paths=video_file_paths)
             except Exception as e:
                 print(f"{e} - Failed to send to channel.")
+
+        await self.weverse_client.run_blocking_code(self.weverse_client._remove_files, video_file_paths)
 
     async def on_new_notifications(self, notifications: List[models.Notification]):
         """Hook method for new notifications."""
