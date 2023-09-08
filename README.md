@@ -1,5 +1,8 @@
 # WeverseBot
 
+| :exclamation:  This project is no longer being maintained after Naver has acquired Weverse. They completely switched their API, and I do not have the time to make another wrapper.  :exclamation:  |
+|-----------------------------------------|
+
 ## [Invite to your Server](https://discord.com/oauth2/authorize?client_id=864670527187451914&scope=bot&permissions=2952997936)
 
 [![Discord Bots](https://top.gg/api/widget/864670527187451914.svg)](https://top.gg/bot/864670527187451914)
